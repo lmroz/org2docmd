@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bt51/ntpclient"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 )
@@ -89,7 +89,7 @@ const entry = `###{{.Name}}
 ----------
 `
 
-func main() {
+func main2() {
 	db := map[string]*User{}
 
 	ts := oauth2.StaticTokenSource(
@@ -185,58 +185,45 @@ func main() {
 	}
 }
 
-type Ticker struct {
-	DontReset bool
-	lastTime  time.Time
-}
-
-func (self *Ticker) GetLast() string {
-	last := self.lastTime
-	if last.IsZero() {
-		if !self.DontReset {
-			last = time.Now()
-		}
-	}
-
-	return last.UTC().Format(time.RFC3339)
-}
-
-func (self *Ticker) Tick() {
-	self.lastTime = time.Now()
-}
-
-func (self *Ticker) GetLastAndTick() string {
-	last := self.GetLast()
-	self.Tick()
-	return last
-}
-
-func main2() {
+func main() {
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: "2522f1925ef23b22d4407e39ee6e9227f1ad4ad3"},
+		&oauth2.Token{AccessToken: ""},
 	)
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 	client := github.NewClient(tc)
+	_, xxx, _ := client.Zen()
+	now, _ := time.Parse(time.RFC1123, xxx.Header.Get("Date"))
+	fmt.Printf("Server time: %v\tLocal time: %v\n", now.UTC().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339))
 
-	n, e := ntpclient.GetNetworkTime("0.pool.ntp.org", 123)
-	fmt.Println(n, e)
-	return
+	timer := now
+	seen := map[string]struct{}{}
 
-	tt := Ticker{}
 	for {
-		time.Sleep(10 * time.Second)
-		_ = tt
-		sStr := "mentions:lmroz updated:>" + tt.GetLastAndTick()
-		fmt.Println(sStr)
-		res, _, _ := client.Search.Issues(sStr, &github.SearchOptions{TextMatch: true})
+		time.Sleep(2 * time.Second)
+		sStr := "3hizc2QCWT in:title,body,comments" // updated:>" + timer.UTC().Format(time.RFC3339)
+		res, _, _ := client.Search.Issues(sStr, &github.SearchOptions{
+			TextMatch: true,
+			Sort:      "updated",
+			Order:     "desc",
+		})
+		fmt.Printf("%v results for:\t%v\n", len(res.Issues), sStr)
 		for _, iss := range res.Issues {
 			fmt.Println(*iss.HTMLURL, iss.UpdatedAt.Format(time.RFC3339))
+			spew.Dump(iss.TextMatches)
+			for _, frag := range iss.TextMatches {
+				if _, ok := seen[*frag.ObjectURL]; ok {
+					continue
+				}
+				seen[*frag.ObjectURL] = struct{}{}
+				client.PullRequests.
+					fmt.Printf("Message:\t%v\n", *frag.Fragment)
+				fmt.Println()
+			}
+			if timer.Before(*iss.UpdatedAt) {
+				timer = *iss.UpdatedAt
+			}
 		}
 		fmt.Println("--------------------------------------------------------")
 	}
-
-	return
-
-	// spew.Dump(db)
 
 }
